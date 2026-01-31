@@ -1,15 +1,51 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import { initialData, type BoardData } from "@/lib/kanban";
+import { fetchBoard, createCard, deleteCard, toBoardData, updateCard, updateColumn } from "@/lib/api";
+import { findCardLocation, type BoardData } from "@/lib/kanban";
 
 const CREDENTIALS = { username: "user", password: "password" };
 
 export default function Home() {
-  const [board, setBoard] = useState<BoardData>(() => initialData);
+  const [board, setBoard] = useState<BoardData | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState<string>(CREDENTIALS.username);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [boardError, setBoardError] = useState<string | null>(null);
+
+  const refreshBoard = useCallback(async () => {
+    setIsLoading(true);
+    setBoardError(null);
+    try {
+      const payload = await fetchBoard(username);
+      setBoard(toBoardData(payload));
+    } catch (err) {
+      setBoardError("Unable to load the board from the server.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [username]);
+
+  const handleBoardChange = useCallback(
+    (updater: SetStateAction<BoardData>) => {
+      setBoard((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return typeof updater === "function" ? updater(prev) : updater;
+      });
+    },
+    []
+  );
 
   const handleLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -17,10 +53,8 @@ export default function Home() {
     const username = String(formData.get("username") || "").trim();
     const password = String(formData.get("password") || "").trim();
 
-    if (
-      username === CREDENTIALS.username &&
-      password === CREDENTIALS.password
-    ) {
+    if (username === CREDENTIALS.username && password === CREDENTIALS.password) {
+      setUsername(username);
       setIsAuthenticated(true);
       setError(null);
       event.currentTarget.reset();
@@ -32,6 +66,89 @@ export default function Home() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setBoard(null);
+    setBoardError(null);
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshBoard();
+    }
+  }, [isAuthenticated, refreshBoard]);
+
+  const handleRenameColumn = async (columnId: string, title: string) => {
+    try {
+      await updateColumn(Number(columnId), { title }, username);
+    } catch (err) {
+      setBoardError("Unable to save column changes.");
+      refreshBoard();
+    }
+  };
+
+  const handleAddCard = async (columnId: string, title: string, details: string) => {
+    const columnIdNumber = Number(columnId);
+    if (Number.isNaN(columnIdNumber)) {
+      setBoardError("Unable to add the card.");
+      return;
+    }
+    try {
+      await createCard(
+        {
+          column_id: columnIdNumber,
+          title,
+          details: details || "No details yet.",
+        },
+        username
+      );
+      refreshBoard();
+    } catch (err) {
+      setBoardError("Unable to add the card.");
+      refreshBoard();
+    }
+  };
+
+  const handleDeleteCard = async (columnId: string, cardId: string) => {
+    const cardIdNumber = Number(cardId);
+    if (Number.isNaN(cardIdNumber)) {
+      return;
+    }
+    try {
+      await deleteCard(cardIdNumber, username);
+      refreshBoard();
+    } catch (err) {
+      setBoardError("Unable to remove the card.");
+      refreshBoard();
+    }
+  };
+
+  const handleMoveCard = async (
+    activeId: string,
+    _overId: string,
+    nextColumns: BoardData["columns"]
+  ) => {
+    const location = findCardLocation(nextColumns, activeId);
+    if (!location) {
+      return;
+    }
+    const cardIdNumber = Number(activeId);
+    const columnIdNumber = Number(location.columnId);
+    if (Number.isNaN(cardIdNumber) || Number.isNaN(columnIdNumber)) {
+      return;
+    }
+    try {
+      await updateCard(
+        cardIdNumber,
+        {
+          column_id: columnIdNumber,
+          position: location.index,
+        },
+        username
+      );
+      refreshBoard();
+    } catch (err) {
+      setBoardError("Unable to move the card.");
+      refreshBoard();
+    }
   };
 
   const welcomeCopy = useMemo(
@@ -103,7 +220,42 @@ export default function Home() {
     );
   }
 
+  if (isLoading || !board) {
+    return (
+      <div className="relative min-h-screen overflow-hidden">
+        <div className="pointer-events-none absolute left-0 top-0 h-[420px] w-[420px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.25)_0%,_rgba(32,157,215,0.05)_55%,_transparent_70%)]" />
+        <main className="relative mx-auto flex min-h-screen max-w-xl items-center px-6 py-16">
+          <section className="w-full rounded-[32px] border border-[var(--stroke)] bg-white/90 p-8 text-center shadow-[var(--shadow)] backdrop-blur">
+            <h1 className="font-display text-2xl font-semibold text-[var(--navy-dark)]">
+              Loading your board
+            </h1>
+            <p className="mt-3 text-sm text-[var(--gray-text)]">
+              Fetching the latest updates from the server.
+            </p>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <KanbanBoard board={board} onBoardChange={setBoard} onLogout={handleLogout} />
+    <div>
+      {boardError ? (
+        <div className="mx-auto max-w-[1500px] px-6 pt-6">
+          <div className="rounded-2xl border border-[var(--stroke)] bg-white/90 px-4 py-3 text-sm text-[var(--secondary-purple)] shadow-[var(--shadow)]">
+            {boardError}
+          </div>
+        </div>
+      ) : null}
+      <KanbanBoard
+        board={board}
+        onBoardChange={handleBoardChange}
+        onLogout={handleLogout}
+        onRenameColumn={handleRenameColumn}
+        onAddCard={handleAddCard}
+        onDeleteCard={handleDeleteCard}
+        onMoveCard={handleMoveCard}
+      />
+    </div>
   );
 }

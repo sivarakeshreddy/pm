@@ -100,13 +100,13 @@ Success criteria
 ## Part 7: Frontend + Backend integration
 
 Checklist
-- [ ] Replace in-memory Kanban data with backend API calls.
-- [ ] Add optimistic UI where appropriate.
-- [ ] Handle error states gracefully.
+- [x] Replace in-memory Kanban data with backend API calls.
+- [x] Add optimistic UI where appropriate.
+- [x] Handle error states gracefully.
 
 Tests
-- [ ] Frontend unit tests updated for API-driven data (coverage targets where sensible).
-- [ ] Integration tests covering UI + API flows end-to-end.
+- [x] Frontend unit tests updated for API-driven data (coverage targets where sensible).
+- [x] Integration tests covering UI + API flows end-to-end.
 
 Success criteria
 - Kanban data persists across reloads using the backend.

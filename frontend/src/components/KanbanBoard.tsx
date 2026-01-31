@@ -13,15 +13,27 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, moveCard, type BoardData } from "@/lib/kanban";
+import { createId, moveCard, type BoardData, type Column } from "@/lib/kanban";
 
 type KanbanBoardProps = {
   board: BoardData;
   onBoardChange: React.Dispatch<React.SetStateAction<BoardData>>;
   onLogout?: () => void;
+  onRenameColumn?: (columnId: string, title: string) => void;
+  onAddCard?: (columnId: string, title: string, details: string) => void;
+  onDeleteCard?: (columnId: string, cardId: string) => void;
+  onMoveCard?: (activeId: string, overId: string, nextColumns: Column[]) => void;
 };
 
-export const KanbanBoard = ({ board, onBoardChange, onLogout }: KanbanBoardProps) => {
+export const KanbanBoard = ({
+  board,
+  onBoardChange,
+  onLogout,
+  onRenameColumn,
+  onAddCard,
+  onDeleteCard,
+  onMoveCard,
+}: KanbanBoardProps) => {
   const setBoard = onBoardChange;
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
@@ -45,10 +57,14 @@ export const KanbanBoard = ({ board, onBoardChange, onLogout }: KanbanBoardProps
       return;
     }
 
-    setBoard((prev) => ({
-      ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
-    }));
+    setBoard((prev) => {
+      const nextColumns = moveCard(prev.columns, active.id as string, over.id as string);
+      onMoveCard?.(active.id as string, over.id as string, nextColumns);
+      return {
+        ...prev,
+        columns: nextColumns,
+      };
+    });
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
@@ -58,9 +74,14 @@ export const KanbanBoard = ({ board, onBoardChange, onLogout }: KanbanBoardProps
         column.id === columnId ? { ...column, title } : column
       ),
     }));
+    onRenameColumn?.(columnId, title);
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
+    if (onAddCard) {
+      onAddCard(columnId, title, details);
+      return;
+    }
     const id = createId("card");
     setBoard((prev) => ({
       ...prev,
@@ -93,6 +114,7 @@ export const KanbanBoard = ({ board, onBoardChange, onLogout }: KanbanBoardProps
         ),
       };
     });
+    onDeleteCard?.(columnId, cardId);
   };
 
   const activeCard = activeCardId ? cardsById[activeCardId] : null;
