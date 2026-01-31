@@ -70,13 +70,13 @@ Success criteria
 ## Part 5: Database modeling
 
 Checklist
-- [ ] Propose SQLite schema for users, boards, columns, cards, and ordering.
-- [ ] Save schema proposal as JSON in docs/.
-- [ ] Document rationale and migration approach in docs/.
-- [ ] Get user sign-off before implementation.
+- [x] Propose SQLite schema for users, boards, columns, cards, and ordering.
+- [x] Save schema proposal as JSON in docs/.
+- [x] Document rationale and migration approach in docs/.
+- [x] Get user sign-off before implementation.
 
 Tests
-- [ ] Validate schema JSON structure with a simple unit test.
+- [x] Validate schema JSON structure with a simple unit test.
 
 Success criteria
 - Schema proposal is clear, normalized, and approved by the user.
@@ -84,14 +84,14 @@ Success criteria
 ## Part 6: Backend API (persistent Kanban)
 
 Checklist
-- [ ] Create SQLite DB if missing on startup.
-- [ ] Implement CRUD endpoints for board, columns, and cards.
-- [ ] Scope all operations to the signed-in user.
-- [ ] Add request/response validation and error handling.
+- [x] Create SQLite DB if missing on startup.
+- [x] Implement CRUD endpoints for board, columns, and cards.
+- [x] Scope all operations to the signed-in user.
+- [x] Add request/response validation and error handling.
 
 Tests
-- [ ] Unit tests for each endpoint handler (coverage targets where sensible).
-- [ ] Integration tests for create/read/update/delete card and column flows.
+- [x] Unit tests for each endpoint handler (coverage targets where sensible).
+- [x] Integration tests for create/read/update/delete card and column flows.
 
 Success criteria
 - API persists data to SQLite and passes all tests.
