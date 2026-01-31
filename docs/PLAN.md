@@ -8,7 +8,7 @@ Checklist
 - [x] Review root AGENTS.md and existing documentation.
 - [x] Enrich this plan with detailed steps, tests, and success criteria.
 - [x] Create frontend/AGENTS.md that documents the existing frontend code.
-- [ ] Get user approval before starting Part 2.
+- [x] Get user approval before starting Part 2.
 
 Tests
 - None for this step.
@@ -103,6 +103,8 @@ Checklist
 - [x] Replace in-memory Kanban data with backend API calls.
 - [x] Add optimistic UI where appropriate.
 - [x] Handle error states gracefully.
+- [x] Align drag-and-drop identifiers with backend numeric ids via client-side prefixing.
+- [x] Route Playwright integration tests through the backend-served frontend.
 
 Tests
 - [x] Frontend unit tests updated for API-driven data (coverage targets where sensible).
@@ -111,6 +113,11 @@ Tests
 Success criteria
 - Kanban data persists across reloads using the backend.
 - Full flow passes integration tests reliably.
+
+Design decisions (Part 7)
+- Frontend prefixes backend numeric ids for drag-and-drop stability and strips them before API calls.
+- Drag-and-drop uses card/column metadata to resolve drop targets across columns.
+- Playwright runs against the backend-served static build to reflect production behavior.
 
 ## Part 8: AI connectivity (OpenRouter)
 

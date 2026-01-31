@@ -51,24 +51,23 @@ export const KanbanBoard = ({
   const lastOverId = useRef<string | null>(null);
 
   const collisionDetection: CollisionDetection = useMemo(
-    () => (args) =>
-      {
-        const filtered = {
-          ...args,
-          droppableContainers: args.droppableContainers.filter(
-            (container) => container.id !== args.active.id
-          ),
-        };
-        const pointerCollisions = pointerWithin(filtered);
-        if (pointerCollisions.length > 0) {
-          return pointerCollisions;
-        }
-        const intersections = rectIntersection(filtered);
-        if (intersections.length > 0) {
-          return intersections;
-        }
-        return closestCorners(filtered);
-      },
+    () => (args) => {
+      const filtered = {
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          (container) => container.id !== args.active.id
+        ),
+      };
+      const pointerCollisions = pointerWithin(filtered);
+      if (pointerCollisions.length > 0) {
+        return pointerCollisions;
+      }
+      const intersections = rectIntersection(filtered);
+      if (intersections.length > 0) {
+        return intersections;
+      }
+      return closestCorners(filtered);
+    },
     []
   );
 
