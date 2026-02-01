@@ -171,13 +171,13 @@ Success criteria
 ## Part 10: AI chat sidebar UI
 
 Checklist
-- [ ] Build sidebar chat UI aligned to the color scheme.
-- [ ] Display conversation history and AI responses.
-- [ ] Apply AI-driven Kanban updates and refresh the UI.
+- [x] Build sidebar chat UI aligned to the color scheme.
+- [x] Display conversation history and AI responses.
+- [x] Apply AI-driven Kanban updates and refresh the UI.
 
 Tests
-- [ ] Unit tests for chat UI components (coverage targets where sensible).
-- [ ] Integration tests for chat flow including AI-triggered Kanban updates (mocked).
+- [x] Unit tests for chat UI components (coverage targets where sensible).
+- [x] Integration tests for chat flow including AI-triggered Kanban updates (mocked).
 
 Success criteria
 - Sidebar chat is responsive, clear, and stable.

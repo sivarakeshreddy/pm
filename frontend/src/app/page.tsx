@@ -8,8 +8,18 @@ import {
   type FormEvent,
   type SetStateAction,
 } from "react";
+import { ChatSidebar } from "@/components/ChatSidebar";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import { fetchBoard, createCard, deleteCard, toBoardData, updateCard, updateColumn } from "@/lib/api";
+import {
+  fetchBoard,
+  createCard,
+  deleteCard,
+  sendChat,
+  toBoardData,
+  updateCard,
+  updateColumn,
+  type ChatMessage,
+} from "@/lib/api";
 import { findCardLocation, fromCardId, fromColumnId, type BoardData } from "@/lib/kanban";
 
 const CREDENTIALS = { username: "user", password: "password" };
@@ -21,6 +31,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardError, setBoardError] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [isChatSending, setIsChatSending] = useState(false);
 
   const refreshBoard = useCallback(async () => {
     setIsLoading(true);
@@ -68,6 +81,8 @@ export default function Home() {
     setIsAuthenticated(false);
     setBoard(null);
     setBoardError(null);
+    setChatMessages([]);
+    setChatError(null);
   };
 
   useEffect(() => {
@@ -161,6 +176,41 @@ export default function Home() {
       "Sign in to continue to your Kanban board. Use the demo credentials to explore the MVP.",
     []
   );
+
+  const handleSendChat = async (message: string) => {
+    setChatError(null);
+    setIsChatSending(true);
+    const userMessage: ChatMessage = { role: "user", content: message };
+    const history = [...chatMessages];
+    setChatMessages((prev) => [...prev, userMessage]);
+
+    try {
+      const response = await sendChat(
+        {
+          message,
+          history,
+          apply_updates: true,
+        },
+        username
+      );
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: response.response,
+      };
+      setChatMessages((prev) => [...prev, assistantMessage]);
+      if (response.board) {
+        setBoard(toBoardData(response.board));
+      }
+    } catch (err) {
+      setChatError("Unable to reach the assistant right now.");
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Something went wrong. Please try again." },
+      ]);
+    } finally {
+      setIsChatSending(false);
+    }
+  };
 
   if (!isAuthenticated) {
     return (
@@ -260,6 +310,14 @@ export default function Home() {
         onAddCard={handleAddCard}
         onDeleteCard={handleDeleteCard}
         onMoveCard={handleMoveCard}
+        sidebar={(
+          <ChatSidebar
+            messages={chatMessages}
+            onSend={handleSendChat}
+            isSending={isChatSending}
+            error={chatError}
+          />
+        )}
       />
     </div>
   );

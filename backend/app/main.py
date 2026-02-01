@@ -55,6 +55,7 @@ class ChatResponse(BaseModel):
     response: str
     actions: list["ChatAction"] = Field(default_factory=list)
     board: dict | None = None
+    model: str | None = None
 
 
 class ChatHistoryItem(BaseModel):
@@ -368,11 +369,22 @@ def _parse_structured_output(content: str) -> StructuredChatOutput:
     try:
         data = json.loads(content)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="OpenRouter returned invalid JSON") from exc
+        trimmed = content.strip()
+        start = trimmed.find("{")
+        end = trimmed.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                data = json.loads(trimmed[start : end + 1])
+            except json.JSONDecodeError as inner_exc:
+                raise HTTPException(
+                    status_code=502, detail="OpenRouter returned invalid JSON"
+                ) from inner_exc
+        else:
+            raise HTTPException(status_code=502, detail="OpenRouter returned invalid JSON") from exc
     return StructuredChatOutput.model_validate(data)
 
 
-def _call_openrouter(messages: list[dict[str, str]]) -> str:
+def _call_openrouter(messages: list[dict[str, str]]) -> tuple[str, str | None]:
     api_key = _get_openrouter_api_key()
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY not configured")
@@ -381,7 +393,6 @@ def _call_openrouter(messages: list[dict[str, str]]) -> str:
         "model": OPENROUTER_MODEL,
         "messages": messages,
         "temperature": 0,
-        "response_format": {"type": "json_object"},
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -408,13 +419,27 @@ def _call_openrouter(messages: list[dict[str, str]]) -> str:
     message_data = choices[0].get("message")
     if not message_data or "content" not in message_data:
         raise HTTPException(status_code=502, detail="OpenRouter response missing content")
-    return str(message_data["content"]).strip()
+    return str(message_data["content"]).strip(), data.get("model")
 
 
 def _build_structured_messages(board: dict, history: list[ChatHistoryItem], message: str) -> list[dict[str, str]]:
+    summary_parts = []
+    column_titles = []
+    columns = board.get("columns", [])
+    cards = board.get("cards", {})
+    for column in columns:
+        column_titles.append(str(column.get("title")))
+        card_titles = [cards[card_id]["title"] for card_id in column.get("cardIds", []) if card_id in cards]
+        summary_parts.append(f"{column.get('title')}: {', '.join(card_titles) if card_titles else 'No cards'}")
+    board_summary = " | ".join(summary_parts)
+    column_summary = ", ".join(column_titles)
     schema_hint = (
         "You are a Kanban assistant. Reply only as JSON with this shape:\n"
         "{\"reply\": string, \"actions\": [action, ...]}\n"
+        "Keep replies concise (1-2 sentences) unless the user requests detail.\n"
+        "Board data is ALWAYS provided below. Never claim you lack board data.\n"
+        "If asked to summarize the project or board, use ONLY the provided board data.\n"
+        "List the columns exactly as provided and mention a few key cards. Do not invent columns or cards.\n"
         "Action types:\n"
         "- create_card: {\"type\": \"create_card\", \"columnId\": string, \"title\": string, "
         "\"details\": string, \"position\": number|null}\n"
@@ -423,13 +448,12 @@ def _build_structured_messages(board: dict, history: list[ChatHistoryItem], mess
         "- move_card: {\"type\": \"move_card\", \"cardId\": string, \"columnId\": string, "
         "\"position\": number|null}\n"
         "- delete_card: {\"type\": \"delete_card\", \"cardId\": string}\n"
-        "Do not include any extra keys or text."
+        "Do not include any extra keys or text.\n\n"
+        f"Board columns (authoritative): {column_summary}\n"
+        f"Board summary (authoritative): {board_summary}\n"
+        f"Current board data (JSON):\n{json.dumps(board, indent=2)}"
     )
-    board_context = f"Current board data (JSON):\n{json.dumps(board, indent=2)}"
-    messages = [
-        {"role": "system", "content": schema_hint},
-        {"role": "system", "content": board_context},
-    ]
+    messages = [{"role": "system", "content": schema_hint}]
     for item in history:
         messages.append({"role": item.role, "content": item.content})
     messages.append({"role": "user", "content": message})
@@ -596,14 +620,19 @@ def chat(
     user_id = _get_or_create_user(conn, username)
     board = _fetch_board(conn, user_id)
     messages = _build_structured_messages(board, payload.history, payload.message)
-    content = _call_openrouter(messages)
+    content, model = _call_openrouter(messages)
     structured = _parse_structured_output(content)
 
     if payload.apply_updates and structured.actions:
         _apply_actions(conn, user_id, structured.actions)
         board = _fetch_board(conn, user_id)
 
-    return ChatResponse(response=structured.reply, actions=structured.actions, board=board)
+    return ChatResponse(
+        response=structured.reply,
+        actions=structured.actions,
+        board=board,
+        model=model,
+    )
 
 
 @app.get("/api/board")

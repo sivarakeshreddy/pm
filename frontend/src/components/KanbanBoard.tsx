@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -27,6 +27,7 @@ type KanbanBoardProps = {
   onAddCard?: (columnId: string, title: string, details: string) => void;
   onDeleteCard?: (columnId: string, cardId: string) => void;
   onMoveCard?: (activeId: string, overId: string, nextColumns: Column[]) => void;
+  sidebar?: ReactNode;
 };
 
 export const KanbanBoard = ({
@@ -37,6 +38,7 @@ export const KanbanBoard = ({
   onAddCard,
   onDeleteCard,
   onMoveCard,
+  sidebar,
 }: KanbanBoardProps) => {
   const setBoard = onBoardChange;
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
@@ -232,34 +234,41 @@ export const KanbanBoard = ({
           </div>
         </header>
 
-        <DndContext
-          sensors={sensors}
-          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-          collisionDetection={collisionDetection}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-        >
-          <section className="grid gap-6 lg:grid-cols-5">
-            {board.columns.map((column) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                cards={column.cardIds.map((cardId) => board.cards[cardId])}
-                onRename={handleRenameColumn}
-                onAddCard={handleAddCard}
-                onDeleteCard={handleDeleteCard}
-              />
-            ))}
-          </section>
-          <DragOverlay>
-            {activeCard ? (
-              <div className="w-[260px]">
-                <KanbanCardPreview card={activeCard} />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+        <div className={sidebar ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" : ""}>
+          <DndContext
+            sensors={sensors}
+            measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+            collisionDetection={collisionDetection}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <section className="grid gap-6 lg:grid-cols-5">
+              {board.columns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                  onRename={handleRenameColumn}
+                  onAddCard={handleAddCard}
+                  onDeleteCard={handleDeleteCard}
+                />
+              ))}
+            </section>
+            <DragOverlay>
+              {activeCard ? (
+                <div className="w-[260px]">
+                  <KanbanCardPreview card={activeCard} />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+          {sidebar ? (
+            <div className="lg:sticky lg:top-10 lg:self-start">
+              {sidebar}
+            </div>
+          ) : null}
+        </div>
       </main>
     </div>
   );

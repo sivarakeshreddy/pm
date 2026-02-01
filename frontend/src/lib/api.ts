@@ -11,6 +11,23 @@ type ApiOptions = {
     username?: string;
 };
 
+export type ChatMessage = {
+    role: "user" | "assistant";
+    content: string;
+};
+
+type ChatAction = {
+    type: "create_card" | "update_card" | "move_card" | "delete_card";
+    [key: string]: unknown;
+};
+
+type ChatResponse = {
+    response: string;
+    actions: ChatAction[];
+    board?: BoardResponse;
+    model?: string | null;
+};
+
 const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 const apiFetch = async <T>(
@@ -93,3 +110,12 @@ export const updateCard = (
 
 export const deleteCard = (cardId: number, username?: string) =>
     apiFetch(`/api/cards/${cardId}`, { method: "DELETE" }, { username });
+
+export const sendChat = (
+    payload: { message: string; history: ChatMessage[]; apply_updates: boolean },
+    username?: string
+) =>
+    apiFetch<ChatResponse>("/api/chat", {
+        method: "POST",
+        body: JSON.stringify(payload),
+    }, { username });
