@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
-from backend.app import main as main_module
+from app.main import app
 
-client = TestClient(main_module.app)
+client = TestClient(app)
 
 
 def test_chat_missing_api_key(monkeypatch) -> None:

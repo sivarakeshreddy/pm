@@ -3,13 +3,14 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from backend.app import main as main_module
+from app.main import app
+from app.database import init_db
 
 
 def _make_client(tmp_path: Path) -> TestClient:
     os.environ["PM_DB_PATH"] = str(tmp_path / "test.db")
-    main_module._init_db()
-    return TestClient(main_module.app)
+    init_db()
+    return TestClient(app)
 
 
 def test_get_board_returns_seeded_data(tmp_path: Path) -> None:

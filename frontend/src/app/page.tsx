@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
   type FormEvent,
   type SetStateAction,
@@ -42,6 +41,7 @@ export default function Home() {
       const payload = await fetchBoard(username);
       setBoard(toBoardData(payload));
     } catch (err) {
+      if (process.env.NODE_ENV === "development") console.error(err);
       setBoardError("Unable to load the board from the server.");
     } finally {
       setIsLoading(false);
@@ -100,6 +100,7 @@ export default function Home() {
     try {
       await updateColumn(columnIdNumber, { title }, username);
     } catch (err) {
+      if (process.env.NODE_ENV === "development") console.error(err);
       setBoardError("Unable to save column changes.");
       refreshBoard();
     }
@@ -122,6 +123,7 @@ export default function Home() {
       );
       refreshBoard();
     } catch (err) {
+      if (process.env.NODE_ENV === "development") console.error(err);
       setBoardError("Unable to add the card.");
       refreshBoard();
     }
@@ -136,6 +138,7 @@ export default function Home() {
       await deleteCard(cardIdNumber, username);
       refreshBoard();
     } catch (err) {
+      if (process.env.NODE_ENV === "development") console.error(err);
       setBoardError("Unable to remove the card.");
       refreshBoard();
     }
@@ -166,16 +169,14 @@ export default function Home() {
       );
       refreshBoard();
     } catch (err) {
+      if (process.env.NODE_ENV === "development") console.error(err);
       setBoardError("Unable to move the card.");
       refreshBoard();
     }
   };
 
-  const welcomeCopy = useMemo(
-    () =>
-      "Sign in to continue to your Kanban board. Use the demo credentials to explore the MVP.",
-    []
-  );
+  const welcomeCopy =
+    "Sign in to continue to your Kanban board. Use the demo credentials to explore the MVP.";
 
   const handleSendChat = async (message: string) => {
     setChatError(null);
@@ -202,6 +203,7 @@ export default function Home() {
         setBoard(toBoardData(response.board));
       }
     } catch (err) {
+      if (process.env.NODE_ENV === "development") console.error(err);
       setChatError("Unable to reach the assistant right now.");
       setChatMessages((prev) => [
         ...prev,
@@ -232,24 +234,34 @@ export default function Home() {
 
             <form onSubmit={handleLogin} className="mt-6 space-y-4">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+                <label
+                  htmlFor="username"
+                  className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]"
+                >
                   Username
                 </label>
                 <input
+                  id="username"
                   name="username"
                   placeholder="user"
+                  aria-label="Username"
                   className="mt-2 w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
                   required
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+                <label
+                  htmlFor="password"
+                  className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]"
+                >
                   Password
                 </label>
                 <input
+                  id="password"
                   name="password"
                   type="password"
                   placeholder="password"
+                  aria-label="Password"
                   className="mt-2 w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
                   required
                 />

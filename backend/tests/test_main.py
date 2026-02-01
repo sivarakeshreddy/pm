@@ -2,9 +2,11 @@ import os
 
 from fastapi.testclient import TestClient
 
-from backend.app import main as main_module
+from app.main import app
+from app.config import resolve_static_dir
+from app.routes import static as static_module
 
-client = TestClient(main_module.app)
+client = TestClient(app)
 
 
 def test_health_check() -> None:
@@ -26,57 +28,57 @@ def test_api_hello() -> None:
 
 
 def test_root_serves_static_index(tmp_path) -> None:
-    original_static_dir = main_module.STATIC_DIR
+    original_static_dir = static_module.STATIC_DIR
     index_path = tmp_path / "index.html"
     index_path.write_text("Kanban Studio")
 
-    main_module.STATIC_DIR = tmp_path
+    static_module.STATIC_DIR = tmp_path
     response = client.get("/")
     assert response.status_code == 200
     assert "Kanban Studio" in response.text
-    main_module.STATIC_DIR = original_static_dir
+    static_module.STATIC_DIR = original_static_dir
 
 
 def test_static_fallback_serves_files(tmp_path) -> None:
-    original_static_dir = main_module.STATIC_DIR
+    original_static_dir = static_module.STATIC_DIR
     index_path = tmp_path / "index.html"
     index_path.write_text("Index content")
     file_path = tmp_path / "hello.txt"
     file_path.write_text("Hello file")
 
-    main_module.STATIC_DIR = tmp_path
+    static_module.STATIC_DIR = tmp_path
     response = client.get("/hello.txt")
     assert response.status_code == 200
     assert response.text == "Hello file"
-    main_module.STATIC_DIR = original_static_dir
+    static_module.STATIC_DIR = original_static_dir
 
 
 def test_static_fallback_returns_index(tmp_path) -> None:
-    original_static_dir = main_module.STATIC_DIR
+    original_static_dir = static_module.STATIC_DIR
     index_path = tmp_path / "index.html"
     index_path.write_text("Index content")
 
-    main_module.STATIC_DIR = tmp_path
+    static_module.STATIC_DIR = tmp_path
     response = client.get("/unknown/path")
     assert response.status_code == 200
     assert "Index content" in response.text
-    main_module.STATIC_DIR = original_static_dir
+    static_module.STATIC_DIR = original_static_dir
 
 
 def test_static_fallback_404_when_missing() -> None:
-    original_static_dir = main_module.STATIC_DIR
-    main_module.STATIC_DIR = None
+    original_static_dir = static_module.STATIC_DIR
+    static_module.STATIC_DIR = None
 
     response = client.get("/missing")
     assert response.status_code == 404
-    main_module.STATIC_DIR = original_static_dir
+    static_module.STATIC_DIR = original_static_dir
 
 
 def test_resolve_static_dir_uses_env(tmp_path) -> None:
     original_env = os.environ.get("PM_STATIC_DIR")
     os.environ["PM_STATIC_DIR"] = str(tmp_path)
     try:
-        resolved = main_module._resolve_static_dir()
+        resolved = resolve_static_dir()
         assert resolved == tmp_path
     finally:
         if original_env is None:
@@ -86,29 +88,30 @@ def test_resolve_static_dir_uses_env(tmp_path) -> None:
 
 
 def test_mount_static_assets(tmp_path) -> None:
+    from app.main import _mount_static_assets
     (tmp_path / "_next").mkdir()
     (tmp_path / "static").mkdir()
-    main_module._mount_static_assets(tmp_path)
+    _mount_static_assets(tmp_path)
 
 
 def test_static_fallback_directory_index(tmp_path) -> None:
-    original_static_dir = main_module.STATIC_DIR
+    original_static_dir = static_module.STATIC_DIR
     nested_dir = tmp_path / "nested"
     nested_dir.mkdir()
     (nested_dir / "index.html").write_text("Nested index")
     (tmp_path / "index.html").write_text("Root index")
 
-    main_module.STATIC_DIR = tmp_path
+    static_module.STATIC_DIR = tmp_path
     response = client.get("/nested")
     assert response.status_code == 200
     assert "Nested index" in response.text
-    main_module.STATIC_DIR = original_static_dir
+    static_module.STATIC_DIR = original_static_dir
 
 
 def test_static_fallback_404_without_index(tmp_path) -> None:
-    original_static_dir = main_module.STATIC_DIR
-    main_module.STATIC_DIR = tmp_path
+    original_static_dir = static_module.STATIC_DIR
+    static_module.STATIC_DIR = tmp_path
 
     response = client.get("/no-index")
     assert response.status_code == 404
-    main_module.STATIC_DIR = original_static_dir
+    static_module.STATIC_DIR = original_static_dir

@@ -29,33 +29,42 @@ type ChatResponse = {
 };
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "";
+const DEFAULT_TIMEOUT = 30000;
 
 const apiFetch = async <T>(
     path: string,
     options: RequestInit = {},
     apiOptions: ApiOptions = {}
 ): Promise<T> => {
-    const headers = new Headers(options.headers);
-    headers.set("Content-Type", "application/json");
-    if (apiOptions.username) {
-        headers.set("X-User", apiOptions.username);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
+
+    try {
+        const headers = new Headers(options.headers);
+        headers.set("Content-Type", "application/json");
+        if (apiOptions.username) {
+            headers.set("X-User", apiOptions.username);
+        }
+
+        const response = await fetch(`${apiBase}${path}`, {
+            ...options,
+            headers,
+            signal: controller.signal,
+        });
+
+        if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || "Request failed");
+        }
+
+        if (response.status === 204) {
+            return undefined as T;
+        }
+
+        return (await response.json()) as T;
+    } finally {
+        clearTimeout(timeoutId);
     }
-
-    const response = await fetch(`${apiBase}${path}`, {
-        ...options,
-        headers,
-    });
-
-    if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Request failed");
-    }
-
-    if (response.status === 204) {
-        return undefined as T;
-    }
-
-    return (await response.json()) as T;
 };
 
 export const toBoardData = (payload: BoardResponse): BoardData => {

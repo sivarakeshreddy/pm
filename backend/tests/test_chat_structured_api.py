@@ -4,7 +4,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from backend.app import main as main_module
+from app.main import app
+from app.database import init_db
+import app.ai as ai_module
 
 
 class _DummyResponse:
@@ -26,8 +28,8 @@ class _DummyResponse:
 
 def _make_client(tmp_path: Path) -> TestClient:
     os.environ["PM_DB_PATH"] = str(tmp_path / "test.db")
-    main_module._init_db()
-    return TestClient(main_module.app)
+    init_db()
+    return TestClient(app)
 
 
 def test_chat_applies_actions(monkeypatch, tmp_path: Path) -> None:
@@ -54,7 +56,7 @@ def test_chat_applies_actions(monkeypatch, tmp_path: Path) -> None:
         return _DummyResponse(response_content)
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(main_module.httpx, "post", _mock_post)
+    monkeypatch.setattr(ai_module.httpx, "post", _mock_post)
 
     response = client.post("/api/chat", json={"message": "Add a card."})
     assert response.status_code == 200
