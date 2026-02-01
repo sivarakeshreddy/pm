@@ -1,14 +1,15 @@
+import json
 import os
 import sqlite3
 from pathlib import Path
-from typing import Generator, Iterable
+from typing import Annotated, Generator, Iterable, Literal
 
 import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 app = FastAPI()
 
@@ -46,10 +47,57 @@ class CardUpdate(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    history: list["ChatHistoryItem"] = Field(default_factory=list)
+    apply_updates: bool = True
 
 
 class ChatResponse(BaseModel):
     response: str
+    actions: list["ChatAction"] = Field(default_factory=list)
+    board: dict | None = None
+
+
+class ChatHistoryItem(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class CreateCardAction(BaseModel):
+    type: Literal["create_card"]
+    columnId: str
+    title: str
+    details: str = ""
+    position: int | None = None
+
+
+class UpdateCardAction(BaseModel):
+    type: Literal["update_card"]
+    cardId: str
+    title: str | None = None
+    details: str | None = None
+
+
+class MoveCardAction(BaseModel):
+    type: Literal["move_card"]
+    cardId: str
+    columnId: str
+    position: int | None = None
+
+
+class DeleteCardAction(BaseModel):
+    type: Literal["delete_card"]
+    cardId: str
+
+
+ChatAction = Annotated[
+    CreateCardAction | UpdateCardAction | MoveCardAction | DeleteCardAction,
+    Field(discriminator="type"),
+]
+
+
+class StructuredChatOutput(BaseModel):
+    reply: str
+    actions: list[ChatAction] = Field(default_factory=list)
 
 
 DEFAULT_USER = "user"
@@ -316,15 +364,24 @@ def _get_openrouter_api_key() -> str | None:
     return os.getenv("OPENROUTER_API_KEY")
 
 
-def _call_openrouter(message: str) -> str:
+def _parse_structured_output(content: str) -> StructuredChatOutput:
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail="OpenRouter returned invalid JSON") from exc
+    return StructuredChatOutput.model_validate(data)
+
+
+def _call_openrouter(messages: list[dict[str, str]]) -> str:
     api_key = _get_openrouter_api_key()
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY not configured")
 
     payload = {
         "model": OPENROUTER_MODEL,
-        "messages": [{"role": "user", "content": message}],
+        "messages": messages,
         "temperature": 0,
+        "response_format": {"type": "json_object"},
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -354,6 +411,167 @@ def _call_openrouter(message: str) -> str:
     return str(message_data["content"]).strip()
 
 
+def _build_structured_messages(board: dict, history: list[ChatHistoryItem], message: str) -> list[dict[str, str]]:
+    schema_hint = (
+        "You are a Kanban assistant. Reply only as JSON with this shape:\n"
+        "{\"reply\": string, \"actions\": [action, ...]}\n"
+        "Action types:\n"
+        "- create_card: {\"type\": \"create_card\", \"columnId\": string, \"title\": string, "
+        "\"details\": string, \"position\": number|null}\n"
+        "- update_card: {\"type\": \"update_card\", \"cardId\": string, \"title\": string|null, "
+        "\"details\": string|null}\n"
+        "- move_card: {\"type\": \"move_card\", \"cardId\": string, \"columnId\": string, "
+        "\"position\": number|null}\n"
+        "- delete_card: {\"type\": \"delete_card\", \"cardId\": string}\n"
+        "Do not include any extra keys or text."
+    )
+    board_context = f"Current board data (JSON):\n{json.dumps(board, indent=2)}"
+    messages = [
+        {"role": "system", "content": schema_hint},
+        {"role": "system", "content": board_context},
+    ]
+    for item in history:
+        messages.append({"role": item.role, "content": item.content})
+    messages.append({"role": "user", "content": message})
+    return messages
+
+
+def _apply_actions(conn: sqlite3.Connection, user_id: int, actions: list[ChatAction]) -> None:
+    board_id = _get_or_create_board(conn, user_id)
+
+    for action in actions:
+        if isinstance(action, CreateCardAction):
+            column = conn.execute(
+                "SELECT id FROM columns WHERE id = ? AND board_id = ?",
+                (int(action.columnId), board_id),
+            ).fetchone()
+            if not column:
+                continue
+
+            cards = conn.execute(
+                "SELECT id FROM cards WHERE column_id = ? AND archived = 0 ORDER BY position",
+                (int(action.columnId),),
+            ).fetchall()
+            ids = _ordered_ids(cards)
+
+            insert_position = action.position
+            if insert_position is None or insert_position > len(ids):
+                insert_position = len(ids)
+            if insert_position < 0:
+                insert_position = 0
+
+            cursor = conn.execute(
+                """
+                INSERT INTO cards (column_id, title, details, position)
+                VALUES (?, ?, ?, ?)
+                """,
+                (int(action.columnId), action.title, action.details, insert_position),
+            )
+            card_id = int(cursor.lastrowid)
+            ids.insert(insert_position, card_id)
+            _resequence_positions(conn, "cards", ids, "AND column_id = ?", (int(action.columnId),))
+            continue
+
+        if isinstance(action, UpdateCardAction):
+            card_row = conn.execute(
+                """
+                SELECT cards.id
+                FROM cards
+                JOIN columns ON cards.column_id = columns.id
+                WHERE cards.id = ? AND columns.board_id = ?
+                """,
+                (int(action.cardId), board_id),
+            ).fetchone()
+            if not card_row:
+                continue
+            if action.title is not None:
+                conn.execute(
+                    "UPDATE cards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (action.title, int(action.cardId)),
+                )
+            if action.details is not None:
+                conn.execute(
+                    "UPDATE cards SET details = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (action.details, int(action.cardId)),
+                )
+            continue
+
+        if isinstance(action, MoveCardAction):
+            card = conn.execute(
+                """
+                SELECT cards.id, cards.column_id
+                FROM cards
+                JOIN columns ON cards.column_id = columns.id
+                WHERE cards.id = ? AND columns.board_id = ?
+                """,
+                (int(action.cardId), board_id),
+            ).fetchone()
+            if not card:
+                continue
+
+            target_column = conn.execute(
+                "SELECT id FROM columns WHERE id = ? AND board_id = ?",
+                (int(action.columnId), board_id),
+            ).fetchone()
+            if not target_column:
+                continue
+
+            current_column_id = int(card["column_id"])
+            target_column_id = int(action.columnId)
+
+            source_cards = conn.execute(
+                "SELECT id FROM cards WHERE column_id = ? AND archived = 0 ORDER BY position",
+                (current_column_id,),
+            ).fetchall()
+            source_ids = _ordered_ids(source_cards)
+            if int(action.cardId) in source_ids:
+                source_ids.remove(int(action.cardId))
+
+            target_cards = conn.execute(
+                "SELECT id FROM cards WHERE column_id = ? AND archived = 0 ORDER BY position",
+                (target_column_id,),
+            ).fetchall()
+            target_ids = _ordered_ids(target_cards)
+
+            insert_position = action.position
+            if insert_position is None or insert_position > len(target_ids):
+                insert_position = len(target_ids)
+            if insert_position < 0:
+                insert_position = 0
+
+            target_ids.insert(insert_position, int(action.cardId))
+
+            conn.execute(
+                "UPDATE cards SET column_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (target_column_id, int(action.cardId)),
+            )
+            _resequence_positions(conn, "cards", source_ids, "AND column_id = ?", (current_column_id,))
+            _resequence_positions(conn, "cards", target_ids, "AND column_id = ?", (target_column_id,))
+            continue
+
+        if isinstance(action, DeleteCardAction):
+            card = conn.execute(
+                """
+                SELECT cards.id, cards.column_id
+                FROM cards
+                JOIN columns ON cards.column_id = columns.id
+                WHERE cards.id = ? AND columns.board_id = ?
+                """,
+                (int(action.cardId), board_id),
+            ).fetchone()
+            if not card:
+                continue
+            column_id = int(card["column_id"])
+            conn.execute("DELETE FROM cards WHERE id = ?", (int(action.cardId),))
+            remaining = conn.execute(
+                "SELECT id FROM cards WHERE column_id = ? AND archived = 0 ORDER BY position",
+                (column_id,),
+            ).fetchall()
+            _resequence_positions(conn, "cards", _ordered_ids(remaining), "AND column_id = ?", (column_id,))
+
+    conn.commit()
+
+
 @app.on_event("startup")
 def startup() -> None:
     _init_db()
@@ -370,9 +588,22 @@ def hello() -> dict:
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(payload: ChatRequest) -> ChatResponse:
-    response_text = _call_openrouter(payload.message)
-    return ChatResponse(response=response_text)
+def chat(
+    payload: ChatRequest,
+    username: str = Depends(_get_username),
+    conn: sqlite3.Connection = Depends(_get_db),
+) -> ChatResponse:
+    user_id = _get_or_create_user(conn, username)
+    board = _fetch_board(conn, user_id)
+    messages = _build_structured_messages(board, payload.history, payload.message)
+    content = _call_openrouter(messages)
+    structured = _parse_structured_output(content)
+
+    if payload.apply_updates and structured.actions:
+        _apply_actions(conn, user_id, structured.actions)
+        board = _fetch_board(conn, user_id)
+
+    return ChatResponse(response=structured.reply, actions=structured.actions, board=board)
 
 
 @app.get("/api/board")

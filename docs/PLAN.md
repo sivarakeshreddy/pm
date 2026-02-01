@@ -156,13 +156,13 @@ Testing notes (added after Part 8)
 ## Part 9: AI structured outputs for Kanban updates
 
 Checklist
-- [ ] Define Structured Output schema for chat responses and optional board updates.
-- [ ] Send current Kanban JSON + conversation history to the model.
-- [ ] Apply model updates to persisted board data.
+- [x] Define Structured Output schema for chat responses and optional board updates.
+- [x] Send current Kanban JSON + conversation history to the model.
+- [x] Apply model updates to persisted board data.
 
 Tests
-- [ ] Unit tests for schema validation and update application.
-- [ ] Integration tests for end-to-end AI update flow (mocked).
+- [x] Unit tests for schema validation and update application.
+- [x] Integration tests for end-to-end AI update flow (mocked).
 
 Success criteria
 - Structured outputs reliably update the Kanban without errors.
