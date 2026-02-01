@@ -78,3 +78,9 @@ PM_BASE_URL=http://localhost:8000 pytest tests/test_integration.py  # Integratio
 - Use latest library APIs.
 - Use `uv` as Python package manager in Docker.
 - Planning docs are in `docs/` - review `docs/PLAN.md` for context.
+
+
+## DETAILED PLAN
+
+@docs/PLAN.md
+
