@@ -14,10 +14,12 @@ import {
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { useAuth } from "@/lib/auth";
 
 export const KanbanBoard = () => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const { logout, username } = useAuth();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -119,6 +121,12 @@ export const KanbanBoard = () => {
                 One board. Five columns. Zero clutter.
               </p>
             </div>
+            <button
+              onClick={() => logout()}
+              className="rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)] hover:text-[var(--navy-dark)] transition"
+            >
+              Logout ({username})
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-4">
             {board.columns.map((column) => (

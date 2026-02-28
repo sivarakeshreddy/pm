@@ -47,6 +47,19 @@ A working MVP of the frontend has been built and is already in frontend. This is
 3. Be concise. Keep README minimal. IMPORTANT: no emojis ever
 4. When hitting issues, always identify root cause before trying a fix. Do not guess. Prove with evidence, then fix the root cause.
 
+## Documentation Rules
+
+After completing each phase:
+
+1. Update PLAN.md
+   - Mark completed steps
+
+2. Update CHECK_LOG.md
+   - What was implemented
+   - Decisions made
+   - Problems and fixes
+Never finish a task without updating documentation.
+
 ## Working documentation
 
 All documents for planning and executing this project will be in the docs/ directory.
